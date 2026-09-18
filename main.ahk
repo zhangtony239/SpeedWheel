@@ -58,15 +58,25 @@ global STEP := 0.25         ; 每次拨动的速度增量（行/tick）
 global TICK_MS := 10        ; 滚动定时器周期（ms）
 
 ; 说明：本脚本 Send 产生的合成滚轮事件 SendLevel 为默认 0，
-; 与热键的输入级别相同，因此不会被下方 *WheelUp/*WheelDown
-; 热键再次拦截（人工输入仅在 level 高于热键级别时才触发热键），
-; 天然避免自吞循环。
+; 不会触发本脚本注册的 level-0 热键（人工输入仅在 level 高于
+; 热键级别时才触发热键），天然避免自吞循环。
+; 滚轮钩子为动态注册：仅速度模式期间挂载（见 EnterSpeedMode），
+; 非速度模式零拦截，滚轮保持完全原生行为。
 
 ; ---------------- 热键注册 ----------------
 
 RegisterTrigger(cfgHotkey, cfgMode)
 
 RegisterTrigger(hk, mode) {
+    ; 滚轮键不可作 HOTKEY：与速度模式滚轮拦截语义冲突，且 hold 模式下无可靠 Up 事件
+    wheelKeys := ["WheelDown", "WheelUp", "WheelLeft", "WheelRight"]
+    for wk in wheelKeys {
+        if (StrLower(hk) = StrLower(wk)) {
+            TrayTip("HOTKEY 不能配置为滚轮键 `"" hk "`"，已回退为鼠标中键。", "SpeedWheel", "Iconi")
+            hk := "MButton"
+            break
+        }
+    }
     try {
         Hotkey(hk, HotkeyDown)
         if (mode = "hold")
@@ -102,10 +112,13 @@ EnterSpeedMode() {
     speedMode := true
     speed := 0
     carry := 0
+    ; 动态挂载滚轮钩子：仅速度模式期间拦截，非速度模式零拦截
+    Hotkey("*WheelDown", WheelDownHandler)
+    Hotkey("*WheelUp", WheelUpHandler)
     SetTimer ScrollTick, TICK_MS
 }
 
-; 唯一的退出路径：停表 + 清零，保证杀停无残留
+; 唯一的退出路径：停表 + 清零 + 注销钩子，保证杀停无残留
 ExitSpeedMode() {
     global speedMode, speed, carry
     if !speedMode
@@ -114,26 +127,30 @@ ExitSpeedMode() {
     speed := 0
     carry := 0
     SetTimer ScrollTick, 0
+    Hotkey("*WheelDown", , "Off")
+    Hotkey("*WheelUp", , "Off")
 }
 
 ; ---------------- 滚轮拦截与速度映射 ----------------
 
-*WheelDown:: {
-    global speedMode, speed, STEP
-    if speedMode {
-        speed += STEP
+; 修饰键旁路：Ctrl/Shift/Alt 任一物理按住时，滚轮事件原样透传
+; （{Blind} 保留修饰键），不吸收为速度调节；仅裸滚轮参与调速。
+WheelDownHandler(*) {
+    global speed, STEP
+    if (GetKeyState("Ctrl", "P") || GetKeyState("Shift", "P") || GetKeyState("Alt", "P")) {
+        Send("{Blind}{WheelDown}")
         return
     }
-    Send("{WheelDown}")
+    speed += STEP
 }
 
-*WheelUp:: {
-    global speedMode, speed, STEP
-    if speedMode {
-        speed -= STEP
+WheelUpHandler(*) {
+    global speed, STEP
+    if (GetKeyState("Ctrl", "P") || GetKeyState("Shift", "P") || GetKeyState("Alt", "P")) {
+        Send("{Blind}{WheelUp}")
         return
     }
-    Send("{WheelUp}")
+    speed -= STEP
 }
 
 ; ---------------- 滚动输出 ----------------
