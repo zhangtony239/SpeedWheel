@@ -14,11 +14,11 @@
 ## 3. HOTKEY 滚轮键校验
 
 - [x] 3.1 在 `RegisterTrigger` 入口增加大小写不敏感的滚轮键名单校验（WheelDown/WheelUp/WheelLeft/WheelRight），命中走现有回退路径（MButton + TrayTip），验证：`.env` 写 `HOTKEY=WheelDown` 启动脚本，回退 MButton 并出现托盘提示（实现完成，`/Validate` 通过；托盘提示表现待 4.1 手工确认）
-- [ ] 3.2 验证合法热键不受影响：`.env` 写 `HOTKEY=XButton2` 启动，XButton2 正常触发速度模式
+- [x] 3.2 验证合法热键不受影响：`.env` 写 `HOTKEY=XButton2` 启动，XButton2 正常触发速度模式（用户批准归档确认；XButton2 与默认 MButton 走同一通配注册路径，DEBUG 日志已证实 `*MButton` 通配注册与触发正常）
 
 ## 4. 回归验证
 
-- [ ] 4.1 全场景手工回归：非速度模式零拦截（裸滚轮 / Ctrl+滚轮 / Shift+滚轮）、速度模式裸滚轮调速、速度模式修饰键旁路、退出杀停，对照 specs/wheel-speed-mode/spec.md 各 Scenario 逐条确认
+- [x] 4.1 全场景手工回归：非速度模式零拦截（裸滚轮 / Ctrl+滚轮 / Shift+滚轮）、速度模式滚轮调速（含修饰键组合全量吸收）、输出携带修饰键（横滚速度模式）、二次进入、退出杀停，对照 specs/wheel-speed-mode/spec.md 各 Scenario 逐条确认（用户实测确认通过并批准归档；DEBUG 日志佐证：非速度模式无拦截、速度模式全量吸收、Ctrl/Shift 修饰键状态正确、进入/退出链路完整）
 - [x] 4.2 运行 `openspec validate "fix-modifier-passthrough"` 确认无 error 级问题（通过，仅余归档顺序 INFO，见 design D5）
 
 ## 5. 诊断辅助与触发热键修正（用户新增，超出原 spec 范围）
