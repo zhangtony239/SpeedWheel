@@ -20,3 +20,10 @@
 
 - [ ] 4.1 全场景手工回归：非速度模式零拦截（裸滚轮 / Ctrl+滚轮 / Shift+滚轮）、速度模式裸滚轮调速、速度模式修饰键旁路、退出杀停，对照 specs/wheel-speed-mode/spec.md 各 Scenario 逐条确认
 - [x] 4.2 运行 `openspec validate "fix-modifier-passthrough"` 确认无 error 级问题（通过，仅余归档顺序 INFO，见 design D5）
+
+## 5. 诊断辅助与触发热键修正（用户新增，超出原 spec 范围）
+
+- [x] 5.1 新增 `DEBUG=1` 配置：开启后输出调试日志到脚本目录 `speedwheel.log`（每次启动覆盖），记录配置解析、热键注册/触发、速度模式进出、滚轮事件旁路/吸收决策；顺带修复 `.env` 行内注释解析（仅剥离 `" #"` 之后内容，不影响以 `#` 开头的 Win 组合热键）（`/Validate` 通过）
+- [x] 5.2 触发热键改为通配注册（`*` 前缀），使修饰键按住（如 Shift 让 Chrome 横滚时）HOTKEY 仍可触发速度模式（诊断已经 DEBUG 日志确认：Shift 场景下无任何 HotkeyDown 触发记录；实现完成，`/Validate` 通过；design 新增 D6、proposal/specs 已同步更新；行为验证并入 4.1）
+- [x] 5.3 修复二次进入速度模式失效：`EnterSpeedMode` 挂载滚轮钩子时显式传 `"On"`——AHK `Hotkey()` 对已存在的热键省略 Options 时保留原 On/Off 状态，`ExitSpeedMode` 以 `"Off"` 禁用后再次挂载需显式启用（DEBUG 日志确认：第二次进入后无任何滚轮事件被拦截）
+- [x] 5.4 横滚速度模式（用户决策，修订 design D2/D3）：速度模式内移除修饰键旁路，滚轮事件（含 Ctrl/Shift/Alt 组合）全部吸收为速度调节；`ScrollTick` 输出改 `Send("{Blind}{Wheel...}")` 携带物理修饰键，修饰键透传最终到软件——Chrome 中按住 Shift 时为横滚方向速度滚动（design D2/D3 已修订、proposal/specs 已同步；行为验证并入 4.1）
