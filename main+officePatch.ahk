@@ -173,15 +173,20 @@ ExitSpeedMode() {
 ; 速度模式内滚轮全量吸收（D2 修订）：Ctrl/Shift/Alt 组合也参与调速，不做旁路；
 ; 修饰键语义由输出侧 {Blind} 保留并作用于速度滚动（D3 修订，横滚速度模式）。
 WheelDownHandler(*) {
-    global speed, STEP
-    speed += STEP
-    LogMsg("WheelDown: 吸收为速度增量 (speed=" speed "  Ctrl=" GetKeyState("Ctrl", "P") " Shift=" GetKeyState("Shift", "P") " Alt=" GetKeyState("Alt", "P") ")")
+    AdjustSpeed(STEP, "WheelDown")
 }
 
 WheelUpHandler(*) {
-    global speed, STEP
-    speed -= STEP
-    LogMsg("WheelUp: 吸收为速度增量 (speed=" speed "  Ctrl=" GetKeyState("Ctrl", "P") " Shift=" GetKeyState("Shift", "P") " Alt=" GetKeyState("Alt", "P") ")")
+    AdjustSpeed(-STEP, "WheelUp")
+}
+
+; 共享调速（Office 补丁 D1）：速度模式滚轮钩子与 Word/Excel 的 Shift+滚轮热键
+; （速度模式优先路径）统一走此处，保证多条输入路径行为完全收敛。
+; source 仅用于日志区分事件来源，调速行为与来源无关。
+AdjustSpeed(delta, source) {
+    global speed
+    speed += delta
+    LogMsg(source ": 吸收为速度增量 (speed=" speed "  Ctrl=" GetKeyState("Ctrl", "P") " Shift=" GetKeyState("Shift", "P") " Alt=" GetKeyState("Alt", "P") ")")
 }
 
 ; ---------------- 滚动输出 ----------------
@@ -193,10 +198,49 @@ ScrollTick() {
     total := speed + carry
     n := Integer(total)      ; 向零取整，保留符号
     carry := total - n
+    ; D2 修订（Office 横滚速度滚动）：发送时刻前台为 Word/Excel 且物理按住 Shift 时，
+    ; 改发不携带修饰的 WheelLeft/WheelRight（Office 原生不支持 Shift+滚轮横滚）；
+    ; 正速度（向下）→ WheelRight，负速度（向上）→ WheelLeft，与输入侧重映射方向一致。
+    if (n != 0 && GetKeyState("Shift", "P") && IsOfficeActive()) {
+        if (n > 0)
+            SendInput("{WheelRight " n "}")
+        else
+            SendInput("{WheelLeft " (-n) "}")
+        return
+    }
     ; {Blind}（D3 修订）：携带发送时刻物理按住的修饰键，修饰键透传最终到软件——
     ; 按住 Shift 时应用表现为横滚方向的速度滚动，未按住时为裸滚轮竖向滚动。
     if (n > 0)
         Send("{Blind}{WheelDown " n "}")
     else if (n < 0)
         Send("{Blind}{WheelUp " (-n) "}")
+}
+
+; ---------------- Office 补丁：Shift+滚轮横滚（Word / Excel） ----------------
+; （仅 officePatch 变体；规格见 openspec/changes/add-office-shift-wheel-remap）
+; 作用域限定 Word/Excel 前台（D4）；速度模式优先（D1）：速度模式激活时收敛为
+; AdjustSpeed 调速，不发送横滚、不覆盖 SpeedWheel；非速度模式才将
+; Shift+WheelUp/Down 重映射为 WheelLeft/WheelRight（与需求片段一致）。
+
+; Office 作用域谓词（D4）：输入侧 #HotIf 与输出侧 ScrollTick 判定共用
+IsOfficeActive() {
+    return WinActive("ahk_exe WINWORD.EXE") || WinActive("ahk_exe EXCEL.EXE")
+}
+
+#HotIf IsOfficeActive()
++WheelUp::ShiftWheelHandler("Up")
++WheelDown::ShiftWheelHandler("Down")
+#HotIf
+
+ShiftWheelHandler(dir) {
+    global speedMode, STEP
+    if speedMode {
+        ; D1 双路径同行为：速度模式优先——与 WheelUpHandler/WheelDownHandler 共享
+        ; AdjustSpeed，无论 +Wheel 与 *Wheel 两个热键变体以何种优先级命中均一致
+        AdjustSpeed((dir = "Up") ? -STEP : STEP, "Shift+Wheel" dir)
+        return
+    }
+    target := (dir = "Up") ? "WheelLeft" : "WheelRight"
+    LogMsg("Shift+Wheel" dir ": Office 重映射为 " target)
+    SendInput("{" target "}")
 }
